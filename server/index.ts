@@ -53,7 +53,8 @@ app.use((req, res, next) => {
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
-  } else {
+  } else if (!process.env.BACKEND_ONLY) {
+    // Only serve static files if we're not in backend-only mode
     serveStatic(app);
   }
 

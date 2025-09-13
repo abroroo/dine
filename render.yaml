@@ -10,6 +10,8 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: BACKEND_ONLY
+        value: true
       - key: DATABASE_URL
         sync: false  # Set manually in Render dashboard
       - key: JWT_SECRET
