@@ -47,6 +47,7 @@ export interface IStorage {
   
   // Table session operations
   getTableSession(sessionKey: string): Promise<TableSession | undefined>;
+  getActiveSessionByTableId(tableId: string): Promise<TableSession | undefined>;
   createTableSession(session: InsertTableSession): Promise<TableSession>;
   updateTableSessionCart(sessionKey: string, cartData: any, participants: number): Promise<TableSession | undefined>;
   
@@ -204,6 +205,21 @@ export class DatabaseStorage implements IStorage {
       .values(session)
       .returning();
     return newSession;
+  }
+
+  async getActiveSessionByTableId(tableId: string): Promise<TableSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, tableId),
+          gt(tableSessions.expiresAt, new Date())
+        )
+      )
+      .orderBy(desc(tableSessions.createdAt))
+      .limit(1);
+    return session;
   }
 
   async updateTableSessionCart(sessionKey: string, cartData: any, participants: number): Promise<TableSession | undefined> {

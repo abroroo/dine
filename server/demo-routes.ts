@@ -123,7 +123,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
       }
 
       // Find or create table session
-      let session = null;
+      let session = await storage.getActiveSessionByTableId(table.id);
 
       if (!session) {
         // Create new session if none exists
@@ -321,7 +321,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
   wss.on('connection', (ws, req) => {
     console.log('WebSocket connection established');
 
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
       try {
         const message = JSON.parse(data.toString());
         console.log('WebSocket message received:', message);
