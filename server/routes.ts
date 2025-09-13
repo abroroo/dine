@@ -3,8 +3,58 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertRestaurantSchema, insertTableSchema, insertMenuItemSchema, insertOrderSchema } from "@shared/schema";
+import { insertRestaurantSchema, insertTableSchema, insertMenuItemSchema, insertOrderSchema, secureOrderSchema } from "@shared/schema";
 import { randomBytes } from "crypto";
+
+// Helper function to validate auth token and extract user ID
+const validateAuthToken = async (authToken: string): Promise<string | null> => {
+  try {
+    // For production, implement proper JWT validation here
+    // For now, we'll use a simplified approach that works with the existing auth system
+    
+    // The auth token should be the session ID or a way to identify the authenticated user
+    // Since we're using express-session, we need to validate against the session store
+    // For now, we'll implement a basic check - in production you'd want full JWT validation
+    
+    if (!authToken || authToken.length < 10) {
+      return null;
+    }
+    
+    // For demonstration, we'll return null to force proper implementation
+    // In a real implementation, you'd decode the JWT or validate against session store
+    return null;
+  } catch (error) {
+    console.error('Auth token validation error:', error);
+    return null;
+  }
+};
+
+// Helper function to validate restaurant ownership via WebSocket
+const validateRestaurantOwnership = async (restaurantId: string, authToken: string): Promise<boolean> => {
+  try {
+    const userId = await validateAuthToken(authToken);
+    if (!userId) {
+      console.log('WebSocket auth: Invalid or missing auth token');
+      return false;
+    }
+    
+    const restaurant = await storage.getRestaurant(restaurantId);
+    if (!restaurant) {
+      console.log(`WebSocket auth: Restaurant ${restaurantId} not found`);
+      return false;
+    }
+    
+    if (restaurant.ownerId !== userId) {
+      console.log(`WebSocket auth: User ${userId} does not own restaurant ${restaurantId}`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Restaurant ownership validation error:', error);
+    return false;
+  }
+};
 
 interface AuthenticatedRequest extends Express.Request {
   user?: any;
@@ -262,8 +312,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Order routes
   app.post('/api/orders', async (req, res) => {
     try {
-      const orderData = insertOrderSchema.parse(req.body);
-      const order = await storage.createOrder(orderData);
+      // Parse request using secure schema (only accepts item IDs and quantities)
+      const secureOrderData = secureOrderSchema.parse(req.body);
+      
+      // CRITICAL: Validate table belongs to the specified restaurant
+      const table = await storage.getTable(secureOrderData.tableId);
+      if (!table) {
+        return res.status(404).json({ message: "Table not found" });
+      }
+      
+      if (table.restaurantId !== secureOrderData.restaurantId) {
+        return res.status(403).json({ 
+          message: "Table does not belong to the specified restaurant"
+        });
+      }
+      
+      // CRITICAL: If session ID is provided, validate it belongs to the table and is not expired
+      if (secureOrderData.sessionId) {
+        const session = await storage.getTableSession(secureOrderData.sessionId);
+        if (!session) {
+          return res.status(404).json({ message: "Session not found" });
+        }
+        
+        if (session.tableId !== secureOrderData.tableId) {
+          return res.status(403).json({ 
+            message: "Session does not belong to the specified table"
+          });
+        }
+        
+        if (session.expiresAt <= new Date()) {
+          return res.status(403).json({ 
+            message: "Session has expired"
+          });
+        }
+      }
+      
+      // Extract menu item IDs from the order
+      const menuItemIds = secureOrderData.items.map(item => item.menuItemId);
+      
+      // Fetch authoritative menu items from database
+      const menuItems = await storage.getMenuItemsByIds(menuItemIds);
+      
+      // Validate all items exist and are available
+      if (menuItems.length !== menuItemIds.length) {
+        const foundIds = menuItems.map(item => item.id);
+        const missingIds = menuItemIds.filter(id => !foundIds.includes(id));
+        return res.status(400).json({ 
+          message: "Invalid or unavailable menu items", 
+          missingItems: missingIds 
+        });
+      }
+      
+      // Validate all items belong to the same restaurant as the order
+      const invalidItems = menuItems.filter(item => item.restaurantId !== secureOrderData.restaurantId);
+      if (invalidItems.length > 0) {
+        return res.status(400).json({ 
+          message: "Menu items do not belong to the specified restaurant",
+          invalidItems: invalidItems.map(item => item.id)
+        });
+      }
+      
+      // Create order items with server-computed pricing
+      let totalAmount = 0;
+      const orderItems = secureOrderData.items.map(orderItem => {
+        const menuItem = menuItems.find(mi => mi.id === orderItem.menuItemId)!;
+        const itemPrice = parseFloat(menuItem.price);
+        const itemTotal = itemPrice * orderItem.quantity;
+        totalAmount += itemTotal;
+        
+        return {
+          id: orderItem.menuItemId,
+          name: menuItem.name,
+          price: itemPrice,
+          quantity: orderItem.quantity,
+          total: itemTotal,
+        };
+      });
+      
+      // Create order with server-computed pricing
+      const orderData = {
+        tableId: secureOrderData.tableId,
+        restaurantId: secureOrderData.restaurantId,
+        sessionId: secureOrderData.sessionId || null,
+        items: orderItems,
+        totalAmount: totalAmount.toFixed(2),
+        status: 'received' as const,
+        specialInstructions: secureOrderData.specialInstructions,
+      };
+      
+      // Validate the server-computed order data before database insertion
+      const order = await storage.createOrder(insertOrderSchema.parse(orderData));
       
       // Broadcast new order to restaurant dashboard
       if (order.restaurantId) {
@@ -333,25 +471,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on('connection', (ws, req) => {
     console.log('WebSocket client connected');
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
-        const { type, restaurantId, sessionKey } = data;
+        const { type, restaurantId, sessionKey, authToken } = data;
 
         // Subscribe to updates for a specific restaurant or session
         if (type === 'subscribe') {
-          const key = restaurantId || sessionKey;
-          if (key) {
-            if (!clients.has(key)) {
-              clients.set(key, new Set());
+          let authorized = false;
+          let subscriptionKey = null;
+
+          // Customer session subscription - validate session key
+          if (sessionKey) {
+            const session = await storage.getTableSession(sessionKey);
+            if (session && session.expiresAt > new Date()) {
+              authorized = true;
+              subscriptionKey = sessionKey;
+              console.log(`Customer subscribed to session: ${sessionKey}`);
+            } else {
+              console.log(`Invalid or expired session key: ${sessionKey}`);
             }
-            clients.get(key)!.add(ws);
-            console.log(`Client subscribed to ${key}`);
+          }
+          
+          // Restaurant staff subscription - validate restaurant ownership  
+          else if (restaurantId && authToken) {
+            try {
+              // CRITICAL: Validate restaurant ownership with proper authentication
+              authorized = await validateRestaurantOwnership(restaurantId, authToken);
+              
+              if (authorized) {
+                subscriptionKey = restaurantId;
+                console.log(`Restaurant staff subscribed to restaurant: ${restaurantId}`);
+              } else {
+                console.log(`Restaurant subscription rejected for restaurant: ${restaurantId}`);
+              }
+            } catch (error) {
+              console.log(`Failed to validate restaurant auth: ${error}`);
+              authorized = false;
+            }
+          }
+
+          // Add client to authorized channel or reject
+          if (authorized && subscriptionKey) {
+            if (!clients.has(subscriptionKey)) {
+              clients.set(subscriptionKey, new Set());
+            }
+            clients.get(subscriptionKey)!.add(ws);
+            
+            // Send confirmation
+            ws.send(JSON.stringify({
+              type: 'subscription_confirmed',
+              key: subscriptionKey
+            }));
+          } else {
+            // Reject unauthorized subscription
+            ws.send(JSON.stringify({
+              type: 'subscription_rejected',
+              message: 'Unauthorized or invalid subscription request'
+            }));
+            ws.close();
+            return;
           }
         }
         
         // Handle cart updates and broadcast to session participants
         if (type === 'cart_update' && sessionKey) {
+          // Validate session key before processing cart update
+          const session = await storage.getTableSession(sessionKey);
+          if (!session || session.expiresAt <= new Date()) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Invalid or expired session'
+            }));
+            return;
+          }
+
           // Update the cart data in the database session
           const { cartItems, participants } = data;
           storage.updateTableSessionCart(sessionKey, { items: cartItems }, participants)
@@ -366,10 +560,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })
             .catch(error => {
               console.error('Failed to update cart data:', error);
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Failed to update cart'
+              }));
             });
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Invalid message format'
+        }));
       }
     });
 

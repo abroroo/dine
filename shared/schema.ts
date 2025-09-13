@@ -172,6 +172,18 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   updatedAt: true,
 });
 
+// Secure order schema that only accepts item IDs and quantities from clients
+export const secureOrderSchema = z.object({
+  tableId: z.string().uuid(),
+  restaurantId: z.string().uuid(),
+  sessionId: z.string().uuid().nullable().optional(),
+  items: z.array(z.object({
+    menuItemId: z.string().uuid(),
+    quantity: z.number().int().min(1),
+  })),
+  specialInstructions: z.string().optional(),
+});
+
 // Type exports
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -185,3 +197,4 @@ export type TableSession = typeof tableSessions.$inferSelect;
 export type InsertTableSession = z.infer<typeof insertTableSessionSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type SecureOrder = z.infer<typeof secureOrderSchema>;

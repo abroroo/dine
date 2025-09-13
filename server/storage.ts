@@ -19,7 +19,7 @@ import {
   type InsertOrder,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, gt } from "drizzle-orm";
+import { eq, and, desc, gt, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -41,6 +41,8 @@ export interface IStorage {
   // Menu operations
   getMenuItems(restaurantId: string): Promise<MenuItem[]>;
   getMenuItemsByCategory(restaurantId: string, category: string): Promise<MenuItem[]>;
+  getMenuItem(id: string): Promise<MenuItem | undefined>;
+  getMenuItemsByIds(ids: string[]): Promise<MenuItem[]>;
   createMenuItem(menuItem: InsertMenuItem): Promise<MenuItem>;
   
   // Table session operations
@@ -153,6 +155,25 @@ export class DatabaseStorage implements IStorage {
           eq(menuItems.available, true)
         )
       );
+  }
+
+  async getMenuItem(id: string): Promise<MenuItem | undefined> {
+    const [menuItem] = await db
+      .select()
+      .from(menuItems)
+      .where(and(eq(menuItems.id, id), eq(menuItems.available, true)));
+    return menuItem;
+  }
+
+  async getMenuItemsByIds(ids: string[]): Promise<MenuItem[]> {
+    if (ids.length === 0) return [];
+    return await db
+      .select()
+      .from(menuItems)
+      .where(and(
+        inArray(menuItems.id, ids),
+        eq(menuItems.available, true)
+      ));
   }
 
   async createMenuItem(menuItem: InsertMenuItem): Promise<MenuItem> {

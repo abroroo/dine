@@ -51,20 +51,16 @@ export default function CollaborativeCart({
     setIsPlacingOrder(true);
 
     try {
-      // Create order
+      // Create order with secure schema (only item IDs and quantities)
       const orderData = {
         tableId,
         restaurantId,
-        sessionId: sessionKey ?? null, // Include sessionKey if available
+        sessionId: sessionKey ?? null,
         items: cartItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
+          menuItemId: item.id,
           quantity: item.quantity,
-          total: item.total,
         })),
-        totalAmount: totalAmount.toFixed(2),
-        status: 'received',
+        specialInstructions: undefined, // Add this field if needed in the future
       };
 
       const response = await apiRequest("POST", "/api/orders", orderData);
