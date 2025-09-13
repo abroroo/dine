@@ -111,6 +111,47 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Table join endpoint for collaborative sessions
+  app.post('/api/tables/:qrCode/join', async (req, res) => {
+    try {
+      const { qrCode } = req.params;
+
+      // Get table by QR code
+      const table = await storage.getTableByQrCode(qrCode);
+      if (!table) {
+        return res.status(404).json({ message: "Table not found" });
+      }
+
+      // Find or create table session
+      let session = null;
+
+      if (!session) {
+        // Create new session if none exists
+        const sessionKey = randomBytes(16).toString('hex');
+        const sessionData = {
+          tableId: table.id,
+          sessionKey,
+          participants: 1,
+          cartData: {},
+          expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000) // 4 hours
+        };
+        session = await storage.createTableSession(sessionData);
+      } else {
+        // Increment participants
+        session = await storage.updateTableSessionCart(session.sessionKey, session.cartData, (session.participants || 1) + 1);
+      }
+
+      res.json({
+        table,
+        session,
+        message: "Joined table session successfully"
+      });
+    } catch (error) {
+      console.error("Error joining table:", error);
+      res.status(500).json({ message: "Failed to join table" });
+    }
+  });
+
   // Table sessions (collaborative cart)
   app.post('/api/table-sessions', async (req, res) => {
     try {
@@ -299,6 +340,53 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
             type: 'room-joined',
             data: { room }
           }));
+
+        } else if (message.type === 'subscribe') {
+          // Handle subscribe for backward compatibility
+          const { sessionKey } = message;
+          const room = `table-${sessionKey}`;
+
+          if (!wsConnections.has(room)) {
+            wsConnections.set(room, new Set());
+          }
+
+          wsConnections.get(room)!.add(ws);
+          console.log(`Client subscribed to room: ${room}`);
+
+          ws.send(JSON.stringify({
+            type: 'subscribed',
+            data: { sessionKey, room }
+          }));
+
+        } else if (message.type === 'cart_update') {
+          // Handle real-time cart updates
+          const { sessionKey, cartItems, participants } = message;
+          const room = `table-${sessionKey}`;
+
+          console.log(`Broadcasting cart update to room: ${room}`, { cartItems: cartItems?.length, participants });
+
+          // Update session cart data in database
+          if (sessionKey && cartItems) {
+            try {
+              await storage.updateTableSessionCart(sessionKey, { items: cartItems }, participants || 1);
+            } catch (error) {
+              console.error('Failed to update session cart:', error);
+            }
+          }
+
+          // Broadcast to all clients in the room except sender
+          const connections = wsConnections.get(room) || new Set();
+          const broadcastMessage = JSON.stringify({
+            type: 'cart_update',
+            cartItems,
+            participants
+          });
+
+          connections.forEach(clientWs => {
+            if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(broadcastMessage);
+            }
+          });
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);

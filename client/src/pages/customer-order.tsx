@@ -54,7 +54,7 @@ export default function CustomerOrder() {
       if (!response.ok) throw new Error("Failed to join table");
       return response.json();
     },
-    enabled: !!qrCode && qrCode !== "demo-table" && !sessionKey,
+    enabled: !!qrCode && !sessionKey, // Remove demo-table exclusion
   });
 
   // Set session key when we get session data
