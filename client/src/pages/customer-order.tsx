@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MenuDisplay from "@/components/menu-display";
-import CollaborativeCart from "@/components/collaborative-cart";
+import StickyBottomCart from "@/components/sticky-bottom-cart";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Table, Restaurant, MenuItem, TableSession } from "@shared/schema";
 import { Users, Clock, CheckCircle } from "lucide-react";
@@ -260,20 +260,17 @@ export default function CustomerOrder() {
         data-testid="menu-display"
       />
 
-      {/* Floating Cart */}
-      {cartItems.length > 0 && (
-        <CollaborativeCart
-          cartItems={cartItems}
-          participants={participants}
-          totalAmount={totalAmount}
-          onUpdateItem={updateCartItem}
-          sessionKey={sessionKey}
-          tableId={table?.id}
-          restaurantId={displayRestaurant?.id || "demo"}
-          onOrderPlaced={(status) => setOrderStatus(status)}
-          data-testid="collaborative-cart"
-        />
-      )}
+      {/* Sticky Bottom Cart */}
+      <StickyBottomCart
+        cartItems={cartItems}
+        participants={participants}
+        totalAmount={totalAmount}
+        onUpdateItem={updateCartItem}
+        sessionKey={sessionKey}
+        tableId={table?.id}
+        restaurantId={displayRestaurant?.id || "demo"}
+        onOrderPlaced={(status) => setOrderStatus(status)}
+      />
     </div>
   );
 }

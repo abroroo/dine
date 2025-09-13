@@ -85,13 +85,7 @@
 }
 
 @layer components {
-  .floating-cart {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 50;
-  }
+  /* Removed old floating cart styles - now using sticky bottom cart */
   
   .order-status-preparing {
     background: linear-gradient(45deg, #fbbf24, #f59e0b);
