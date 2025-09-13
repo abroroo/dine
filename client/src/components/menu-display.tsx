@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,16 +11,23 @@ interface MenuDisplayProps {
 }
 
 export default function MenuDisplay({ menuItems, onAddToCart }: MenuDisplayProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string>("appetizers");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   // Get unique categories
   const categories = Array.from(new Set(menuItems.map(item => item.category)));
-  const sortedCategories = ["appetizers", "mains", "drinks", "desserts"].filter(cat => 
+  const sortedCategories = ["appetizers", "mains", "drinks", "desserts"].filter(cat =>
     categories.includes(cat)
-  ).concat(categories.filter(cat => 
+  ).concat(categories.filter(cat =>
     !["appetizers", "mains", "drinks", "desserts"].includes(cat)
   ));
+
+  // Set the first available category as default when menu items load
+  useEffect(() => {
+    if (menuItems.length > 0 && !selectedCategory && sortedCategories.length > 0) {
+      setSelectedCategory(sortedCategories[0]);
+    }
+  }, [menuItems, selectedCategory, sortedCategories]);
 
   // Filter items by selected category
   const filteredItems = menuItems.filter(item => item.category === selectedCategory);
