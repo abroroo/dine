@@ -63,7 +63,7 @@ export default function CollaborativeCart({
           quantity: item.quantity,
           total: item.total,
         })),
-        totalAmount: Number(totalAmount.toFixed(2)),
+        totalAmount: totalAmount.toFixed(2),
         status: 'received',
       };
 
