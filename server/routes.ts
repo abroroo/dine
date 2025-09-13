@@ -11,6 +11,59 @@ interface AuthenticatedRequest extends Express.Request {
   body: any;
 }
 
+// Authorization middleware to verify restaurant ownership
+const requireRestaurantOwnership = async (req: AuthenticatedRequest, res: any, next: any) => {
+  try {
+    const restaurantId = req.params.restaurantId;
+    const userId = req.user!.claims.sub;
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: "Restaurant ID is required" });
+    }
+
+    const restaurant = await storage.getRestaurant(restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    if (restaurant.ownerId !== userId) {
+      return res.status(403).json({ message: "Access denied: You do not own this restaurant" });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error verifying restaurant ownership:", error);
+    res.status(500).json({ message: "Failed to verify restaurant access" });
+  }
+};
+
+// Authorization middleware to verify order belongs to user's restaurant
+const requireOrderOwnership = async (req: AuthenticatedRequest, res: any, next: any) => {
+  try {
+    const orderId = req.params.id;
+    const userId = req.user!.claims.sub;
+
+    if (!orderId) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
+    const order = await storage.getOrder(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const restaurant = await storage.getRestaurant(order.restaurantId);
+    if (!restaurant || restaurant.ownerId !== userId) {
+      return res.status(403).json({ message: "Access denied: This order does not belong to your restaurant" });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error verifying order ownership:", error);
+    res.status(500).json({ message: "Failed to verify order access" });
+  }
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -68,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Table management routes
-  app.get('/api/restaurants/:restaurantId/tables', isAuthenticated, async (req, res) => {
+  app.get('/api/restaurants/:restaurantId/tables', isAuthenticated, requireRestaurantOwnership, async (req, res) => {
     try {
       const tables = await storage.getRestaurantTables(req.params.restaurantId);
       res.json(tables);
@@ -78,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/restaurants/:restaurantId/tables', isAuthenticated, async (req, res) => {
+  app.post('/api/restaurants/:restaurantId/tables', isAuthenticated, requireRestaurantOwnership, async (req, res) => {
     try {
       const qrCode = `table-${Date.now()}-${randomBytes(4).toString('hex')}`;
       const tableData = insertTableSchema.parse({
@@ -131,7 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/restaurants/:restaurantId/menu', isAuthenticated, async (req, res) => {
+  app.post('/api/restaurants/:restaurantId/menu', isAuthenticated, requireRestaurantOwnership, async (req, res) => {
     try {
       const menuItemData = insertMenuItemSchema.parse({
         ...req.body,
@@ -227,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/restaurants/:restaurantId/orders', isAuthenticated, async (req, res) => {
+  app.get('/api/restaurants/:restaurantId/orders', isAuthenticated, requireRestaurantOwnership, async (req, res) => {
     try {
       const orders = await storage.getActiveOrders(req.params.restaurantId);
       res.json(orders);
@@ -237,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/orders/:id/status', isAuthenticated, async (req, res) => {
+  app.put('/api/orders/:id/status', isAuthenticated, requireOrderOwnership, async (req, res) => {
     try {
       const { status } = req.body;
       const order = await storage.updateOrderStatus(req.params.id, status);
