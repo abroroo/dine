@@ -9,6 +9,7 @@ import StickyBottomCart from "@/components/sticky-bottom-cart";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Table, Restaurant, MenuItem, TableSession } from "@shared/schema";
 import { Users, Clock, CheckCircle } from "lucide-react";
+import { config } from "@/lib/config";
 
 interface CartItem {
   id: string;
@@ -47,7 +48,7 @@ export default function CustomerOrder() {
   const { data: sessionData } = useQuery({
     queryKey: ["/api/tables", qrCode, "join"],
     queryFn: async () => {
-      const response = await fetch(`/api/tables/${qrCode}/join`, {
+      const response = await fetch(`${config.apiBaseUrl}/api/tables/${qrCode}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
