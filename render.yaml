@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: restaurant-ordering-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build:backend
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false  # Set to your Vercel URL
+    healthCheckPath: /api/restaurants/550e8400-e29b-41d4-a716-446655440000
