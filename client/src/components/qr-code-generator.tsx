@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Table } from "@shared/schema";
 import { QrCode, Plus, Copy } from "lucide-react";
+import { Link } from "wouter";
 
 interface QRCodeGeneratorProps {
   restaurantId: string;
@@ -126,13 +127,8 @@ export default function QRCodeGenerator({ restaurantId }: QRCodeGeneratorProps) 
                         <Copy className="h-3 w-3 mr-1" />
                         Copy URL
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => window.open(`/table/${table.qrCode}`, '_blank')}
-                        className="w-full"
-                        data-testid={`button-preview-${table.id}`}
-                      >
-                        Preview
+                      <Button asChild size="sm" className="w-full" data-testid={`button-preview-${table.id}`}>
+                        <Link href={`/table/${table.qrCode}`}>Preview</Link>
                       </Button>
                     </div>
                   </div>

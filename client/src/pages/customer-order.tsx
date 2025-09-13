@@ -145,8 +145,9 @@ export default function CustomerOrder() {
   const addToCart = (menuItem: MenuItem, quantity: number = 1) => {
     setCartItems(prev => {
       const existing = prev.find(item => item.id === menuItem.id);
+      let updatedCart;
       if (existing) {
-        return prev.map(item =>
+        updatedCart = prev.map(item =>
           item.id === menuItem.id
             ? { 
                 ...item, 
@@ -156,7 +157,7 @@ export default function CustomerOrder() {
             : item
         );
       } else {
-        return [...prev, {
+        updatedCart = [...prev, {
           id: menuItem.id,
           name: menuItem.name,
           price: parseFloat(menuItem.price),
@@ -164,19 +165,46 @@ export default function CustomerOrder() {
           total: quantity * parseFloat(menuItem.price)
         }];
       }
+      
+      // Broadcast cart update via WebSocket
+      if (websocket && sessionKey) {
+        websocket.send(JSON.stringify({
+          type: 'cart_update',
+          sessionKey,
+          cartItems: updatedCart,
+          participants
+        }));
+      }
+      
+      return updatedCart;
     });
   };
 
   const updateCartItem = (id: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCartItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setCartItems(prev => prev.map(item =>
-        item.id === id
-          ? { ...item, quantity, total: quantity * item.price }
-          : item
-      ));
-    }
+    setCartItems(prev => {
+      let updatedCart;
+      if (quantity <= 0) {
+        updatedCart = prev.filter(item => item.id !== id);
+      } else {
+        updatedCart = prev.map(item =>
+          item.id === id
+            ? { ...item, quantity, total: quantity * item.price }
+            : item
+        );
+      }
+      
+      // Broadcast cart update via WebSocket
+      if (websocket && sessionKey) {
+        websocket.send(JSON.stringify({
+          type: 'cart_update',
+          sessionKey,
+          cartItems: updatedCart,
+          participants
+        }));
+      }
+      
+      return updatedCart;
+    });
   };
 
   const totalAmount = cartItems.reduce((sum, item) => sum + item.total, 0);

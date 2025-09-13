@@ -55,7 +55,7 @@ export default function CollaborativeCart({
       const orderData = {
         tableId,
         restaurantId,
-        sessionId: sessionKey ? undefined : null, // Only set for real sessions
+        sessionId: sessionKey ?? null, // Include sessionKey if available
         items: cartItems.map(item => ({
           id: item.id,
           name: item.name,
@@ -63,7 +63,7 @@ export default function CollaborativeCart({
           quantity: item.quantity,
           total: item.total,
         })),
-        totalAmount: totalAmount.toFixed(2),
+        totalAmount: Number(totalAmount.toFixed(2)),
         status: 'received',
       };
 

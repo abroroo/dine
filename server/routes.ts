@@ -211,6 +211,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const orderData = insertOrderSchema.parse(req.body);
       const order = await storage.createOrder(orderData);
+      
+      // Broadcast new order to restaurant dashboard
+      if (order.restaurantId) {
+        (req as any).broadcast?.(order.restaurantId, {
+          type: 'new_order',
+          order
+        });
+      }
+      
       res.json(order);
     } catch (error) {
       console.error("Error creating order:", error);
@@ -235,6 +244,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
+      
+      // Broadcast order status update to restaurant dashboard
+      if (order.restaurantId) {
+        (req as any).broadcast?.(order.restaurantId, {
+          type: 'order_update',
+          order
+        });
+      }
+      
+      // Broadcast status update to customer table session if available
+      if (order.sessionId) {
+        (req as any).broadcast?.(order.sessionId, {
+          type: 'order_status_update',
+          status: order.status,
+          orderId: order.id
+        });
+      }
+      
       res.json(order);
     } catch (error) {
       console.error("Error updating order status:", error);
@@ -268,6 +295,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             clients.get(key)!.add(ws);
             console.log(`Client subscribed to ${key}`);
           }
+        }
+        
+        // Handle cart updates and broadcast to session participants
+        if (type === 'cart_update' && sessionKey) {
+          // Update the cart data in the database session
+          const { cartItems, participants } = data;
+          storage.updateTableSessionCart(sessionKey, { items: cartItems }, participants)
+            .then(() => {
+              // Broadcast cart update to all session participants
+              broadcast(sessionKey, {
+                type: 'cart_update',
+                cartItems,
+                participants,
+                sessionKey
+              });
+            })
+            .catch(error => {
+              console.error('Failed to update cart data:', error);
+            });
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
