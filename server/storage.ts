@@ -50,6 +50,7 @@ export interface IStorage {
   getActiveSessionByTableId(tableId: string): Promise<TableSession | undefined>;
   createTableSession(session: InsertTableSession): Promise<TableSession>;
   updateTableSessionCart(sessionKey: string, cartData: any, participants: number): Promise<TableSession | undefined>;
+  expireTableSession(tableId: string): Promise<void>;
   
   // Order operations
   getOrder(id: string): Promise<Order | undefined>;
@@ -229,6 +230,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tableSessions.sessionKey, sessionKey))
       .returning();
     return session;
+  }
+
+  async expireTableSession(tableId: string): Promise<void> {
+    // Set all active sessions for this table to expire immediately
+    await db
+      .update(tableSessions)
+      .set({
+        expiresAt: new Date(), // Set to current time to expire immediately
+        cartData: {}, // Clear cart data
+        participants: 0 // Reset participants
+      })
+      .where(
+        and(
+          eq(tableSessions.tableId, tableId),
+          gt(tableSessions.expiresAt, new Date())
+        )
+      );
   }
 
   // Order operations

@@ -298,6 +298,12 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
       const { status } = req.body;
       const order = await storage.updateOrderStatus(req.params.id, status);
 
+      // If order is completed, reset the table session for new customers
+      if (status === 'completed') {
+        await storage.expireTableSession(order.tableId);
+        console.log(`🔄 Table session reset for table ${order.tableId} after order completion`);
+      }
+
       // Broadcast order status update
       const wsRoom = `restaurant-${order.restaurantId}`;
       const tableRoom = `table-${order.tableId}`;
@@ -315,6 +321,21 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
           }
         });
       });
+
+      // If session was reset, broadcast session reset to table room
+      if (status === 'completed') {
+        const sessionResetMessage = JSON.stringify({
+          type: 'session-reset',
+          data: { tableId: order.tableId }
+        });
+
+        const tableConnections = wsConnections.get(tableRoom) || new Set();
+        tableConnections.forEach(ws => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(sessionResetMessage);
+          }
+        });
+      }
 
       res.json(order);
     } catch (error) {

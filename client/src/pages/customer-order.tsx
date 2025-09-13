@@ -87,6 +87,14 @@ export default function CustomerOrder() {
           setParticipants(data.participants || 1);
         } else if (data.type === 'order_status_update') {
           setOrderStatus(data.status);
+        } else if (data.type === 'session-reset') {
+          // Order completed, reset session for new customers
+          setCartItems([]);
+          setParticipants(1);
+          setSessionKey(null);
+          setSessionId(null);
+          setOrderStatus(null);
+          console.log('🔄 Session reset - table ready for new customers');
         }
       };
     }
