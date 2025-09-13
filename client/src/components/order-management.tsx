@@ -72,7 +72,7 @@ export default function OrderManagement({ orders, onUpdateStatus, isUpdating }: 
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
       {orders.map(order => {
         const items = order.items as OrderItem[];
-        const totalAmount = parseFloat(order.totalAmount);
+        const totalAmount = parseFloat(order?.totalAmount || '0');
         
         return (
           <Card key={order.id} className={`shadow-lg ${getStatusColor(order.status || 'received')}`}>
@@ -100,7 +100,7 @@ export default function OrderManagement({ orders, onUpdateStatus, isUpdating }: 
                       {item.quantity}x {item.name}
                     </span>
                     <span data-testid={`text-order-item-price-${order.id}-${index}`}>
-                      ${item.total.toFixed(2)}
+                      ${parseFloat(item?.subtotal || '0')?.toFixed(2)}
                     </span>
                   </div>
                 ))}
