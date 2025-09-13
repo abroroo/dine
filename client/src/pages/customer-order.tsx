@@ -22,6 +22,7 @@ interface CartItem {
 export default function CustomerOrder() {
   const { qrCode } = useParams<{ qrCode: string }>();
   const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [participants, setParticipants] = useState(1);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
@@ -60,8 +61,10 @@ export default function CustomerOrder() {
 
   // Set session key when we get session data
   useEffect(() => {
-    if (sessionData?.session?.sessionKey) {
+    if (sessionData?.session) {
       setSessionKey(sessionData.session.sessionKey);
+      setSessionId(sessionData.session.id);
+      setParticipants(sessionData.session.participants || 1);
     }
   }, [sessionData]);
 
@@ -268,6 +271,7 @@ export default function CustomerOrder() {
         totalAmount={totalAmount}
         onUpdateItem={updateCartItem}
         sessionKey={sessionKey}
+        sessionId={sessionId}
         tableId={table?.id}
         restaurantId={displayRestaurant?.id || "demo"}
         onOrderPlaced={(status) => setOrderStatus(status)}

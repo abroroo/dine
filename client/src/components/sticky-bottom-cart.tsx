@@ -20,6 +20,7 @@ interface StickyBottomCartProps {
   totalAmount: number;
   onUpdateItem: (id: string, quantity: number) => void;
   sessionKey?: string | null;
+  sessionId?: string | null;
   tableId?: string;
   restaurantId: string;
   onOrderPlaced?: (status: string) => void;
@@ -31,6 +32,7 @@ export default function StickyBottomCart({
   totalAmount,
   onUpdateItem,
   sessionKey,
+  sessionId,
   tableId,
   restaurantId,
   onOrderPlaced,
@@ -57,7 +59,7 @@ export default function StickyBottomCart({
       const orderData = {
         tableId,
         restaurantId,
-        sessionId: sessionKey,
+        sessionId: sessionId,
         items: cartItems.map(item => ({
           menuItemId: item.id,
           quantity: item.quantity,
