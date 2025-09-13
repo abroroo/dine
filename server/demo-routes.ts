@@ -64,7 +64,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
   // Table management routes
   app.get('/api/restaurants/:restaurantId/tables', async (req, res) => {
     try {
-      const tables = await storage.getTablesByRestaurantId(req.params.restaurantId);
+      const tables = await storage.getRestaurantTables(req.params.restaurantId);
       res.json(tables);
     } catch (error) {
       console.error("Error fetching tables:", error);
@@ -88,7 +88,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
   // Menu routes
   app.get('/api/restaurants/:restaurantId/menu', async (req, res) => {
     try {
-      const menuItems = await storage.getMenuItemsByRestaurantId(req.params.restaurantId);
+      const menuItems = await storage.getMenuItems(req.params.restaurantId);
       res.json(menuItems);
     } catch (error) {
       console.error("Error fetching menu items:", error);
@@ -120,7 +120,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
 
   app.get('/api/table-sessions/:sessionKey', async (req, res) => {
     try {
-      const session = await storage.getTableSessionByKey(req.params.sessionKey);
+      const session = await storage.getTableSession(req.params.sessionKey);
       if (!session) {
         return res.status(404).json({ message: "Session not found" });
       }
@@ -134,7 +134,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
   app.put('/api/table-sessions/:sessionKey/cart', async (req, res) => {
     try {
       const { cartData } = req.body;
-      const session = await storage.updateTableSessionCart(req.params.sessionKey, cartData);
+      const session = await storage.updateTableSessionCart(req.params.sessionKey, cartData, 1);
 
       // Broadcast cart update via WebSocket
       const wsRoom = `table-${session.tableId}`;
@@ -163,7 +163,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
       const orderData = secureOrderSchema.parse(req.body);
 
       // Calculate total amount server-side for security
-      const menuItems = await storage.getMenuItemsByRestaurantId(orderData.restaurantId);
+      const menuItems = await storage.getMenuItems(orderData.restaurantId);
       const menuItemsMap = new Map(menuItems.map(item => [item.id, item]));
 
       let totalAmount = 0;
@@ -220,7 +220,7 @@ export async function registerDemoRoutes(app: Express): Promise<Server> {
 
   app.get('/api/restaurants/:restaurantId/orders', async (req, res) => {
     try {
-      const orders = await storage.getOrdersByRestaurantId(req.params.restaurantId);
+      const orders = await storage.getRestaurantOrders(req.params.restaurantId);
       res.json(orders);
     } catch (error) {
       console.error("Error fetching orders:", error);
